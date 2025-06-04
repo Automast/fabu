@@ -17,6 +17,7 @@
     "concurrently": "^8.2.0",
     "decimal.js": "^10.4.3",
     "dotenv": "^16.4.7",
+    "express": "^4.19.2",
     "node-telegram-bot-api": "^0.63.0",
     "solana-swap": "^1.1.6",
     "sqlite3": "^5.1.7",
