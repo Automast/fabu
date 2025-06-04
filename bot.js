@@ -1,13 +1,14 @@
 require("dotenv").config();
+const express = require("express"); // <-- ADDED THIS
 const TelegramBot = require("node-telegram-bot-api");
 const sqlite3 = require("sqlite3").verbose();
 const Decimal = require("decimal.js");
 const {
-  Connection,
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
 } = require("@solana/web3.js");
 const bs58Import = require("bs58");
 const bs58 = bs58Import.default || bs58Import;
@@ -3264,5 +3265,24 @@ async function applyPnLFilter(chatId, messageId, filter) {
     });
   }
 }
+
+// --- WEB SERVER FOR RENDER & UPTIMEROBOT ---
+// This part creates a small web server to keep your bot from idling on Render.
+const app = express();
+
+// Render provides a PORT environment variable. We use that or a default of 3000.
+const port = process.env.PORT || 3000;
+
+// This creates a basic homepage route. When UptimeRobot visits your Render URL,
+// this function will run and send back a confirmation message.
+app.get('/', (req, res) => {
+  res.status(200).send('Bot is alive and polling!');
+});
+
+// This starts the web server and makes it listen for connections on the specified port.
+app.listen(port, () => {
+  logger.info(`Web server is listening on port ${port}. Uptime monitoring is now active.`);
+});
+// --- END OF WEB SERVER CODE ---
 
 logger.info("Telegram bot started...");
