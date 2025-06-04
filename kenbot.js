@@ -39,7 +39,7 @@ const logger = winston.createLogger({
   ],
 });
 
-const BOT_TOKEN = "7917619322:AAH0tT_25qD-V3V5qZZVKXEBkGyOKkQPEzE";
+const BOT_TOKEN = "7823500625:AAEAui6HE4Rm5BcRFlHVL6Ewu9oLwTneiS0";
 const MAIN_DB_PATH = path.join(__dirname, "bot_database.db");
 const MONITOR_DB_PATH = path.join(__dirname, "admin_monitor_bot.db");
 const MAX_MESSAGE_LENGTH = 4096;
