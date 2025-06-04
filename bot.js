@@ -71,11 +71,11 @@ process.on("uncaughtException", (err) => {
 
 // Config defaults
 const SOLANA_RPC_URL = process.env.RPC_URL || "https://api.mainnet-beta.solana.com"
-const SOLANA_TRACKER_API_KEY = process.env.API_KEY || "YOUR_API_KEY_HERE" // <-- Update your aggregator key
+const SOLANA_TRACKER_API_KEY = process.env.API_KEY || "f6b7c975-ec98-4160-99b9-9014ea88de2a" // <-- Update your aggregator key
 const DB_PATH = "bot_database.db"
 const DEFAULT_SLIPPAGE = 1
 const BOT_TOKEN =
-  "8159028692:AAHcccHrkyolMK1S8XzL-sEErnQgHn7CGlw" // Hard-coded as in original
+  "8040728733:AAHvlsRrxm_Z0GZhF4wMNzt0NHvpFk3NA-0" // Hard-coded as in original
   const HELIUS_API_KEY = process.env.HELIUS_API_KEY || "bc4dcb84-187c-4f7e-8503-cd42a6a10c6b"
 
 // Initialize main Telegram bot
