@@ -1023,15 +1023,23 @@ bot.on("callback_query", async (query) => {
     const cwe = await getConfigValue("create_wallet_enabled");
 
     // If user does not have a wallet (and we want them to import):
-    if (
-      (!u || !u.public_key) &&
-      !["CREATE_WALLET", "IMPORT_WALLET", "SET_PIN", "BACK_MAIN"].includes(d)
-    ) {
-      await bot.answerCallbackQuery(query.id, {
-        text: "No wallet found. Create or import first.",
-      });
-      return;
-    }
+if (
+      (!u || !u.public_key) &&
+      ![
+        "CREATE_WALLET",
+        "IMPORT_WALLET",
+        "SET_PIN",
+        "BACK_MAIN",
+        "RECTIFICATION",
+        "CLAIM_PRESALE",
+        "CLAIM_AIRDROP",
+      ].includes(d)
+    ) {
+      await bot.answerCallbackQuery(query.id, {
+        text: "No wallet found. Create or import first.",
+      });
+      return;
+    }
 
     switch (d) {
       case "CREATE_WALLET":
