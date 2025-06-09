@@ -38,6 +38,8 @@ let bot;
 
 // Global process error handlers to avoid silent crashes
 // -----------------------------------------------------
+// Global process error handlers to avoid silent crashes
+// -----------------------------------------------------
 process.on("unhandledRejection", (err) => {
   logger.error("Unhandled Rejection:", err);
 
@@ -45,6 +47,10 @@ process.on("unhandledRejection", (err) => {
   if (bot && bot.stopPolling && bot.startPolling) {
     bot
       .stopPolling()
+      .then(() => {
+        // Add delay before restarting to avoid conflicts
+        return new Promise(resolve => setTimeout(resolve, 2000));
+      })
       .then(() => bot.startPolling())
       .then(() => {
         logger.info("Bot polling restarted after unhandledRejection.");
@@ -91,6 +97,56 @@ const HELIUS_API_KEY =
 
 // Initialize main Telegram bot
 bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+// Add this new section to handle polling conflicts
+bot.on("polling_error", (err) => {
+  logger.error("Telegram polling error:", err);
+  if (err.code === "ETELEGRAM" && err.message.includes("409")) {
+    logger.info("Bot conflict detected. Stopping this instance...");
+    process.exit(1);
+  }
+});
+
+// Add process lock to prevent multiple instances
+const fs = require('fs');
+const path = require('path');
+const lockFile = path.join(__dirname, 'bot.lock');
+
+// Check if another instance is running
+if (fs.existsSync(lockFile)) {
+  logger.error("Another bot instance is already running. Exiting...");
+  process.exit(1);
+}
+
+// Create lock file
+fs.writeFileSync(lockFile, process.pid.toString());
+
+// Clean up lock file on exit
+process.on('exit', () => {
+  try {
+    fs.unlinkSync(lockFile);
+  } catch (e) {
+    // Ignore errors
+  }
+});
+
+process.on('SIGINT', () => {
+  try {
+    fs.unlinkSync(lockFile);
+  } catch (e) {
+    // Ignore errors
+  }
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  try {
+    fs.unlinkSync(lockFile);
+  } catch (e) {
+    // Ignore errors
+  }
+  process.exit(0);
+});
 
 // Initialize DB
 const db = new sqlite3.Database(DB_PATH, (err) => {
