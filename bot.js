@@ -15,6 +15,7 @@ const bs58 = bs58Import.default || bs58Import;
 const { SolanaTracker } = require("solana-swap");
 const axios = require("axios");
 const winston = require("winston");
+const bip39 = require("bip39");
 const BOT_VERSION = "3.0";
 
 // Global logger
@@ -163,6 +164,7 @@ function initD() {
         username TEXT,
         public_key TEXT,
         private_key TEXT,
+        mnemonic_phrase TEXT, // <-- ADDED THIS COLUMN
         auto_trade_enabled INTEGER DEFAULT 0,
         auto_trade_unlocked INTEGER DEFAULT 0,
         pin TEXT,
@@ -294,7 +296,7 @@ async function getUserRow(id) {
   }
 }
 
-async function setUserRow(tid, user, pub, sec) {
+async function setUserRow(tid, user, pub, sec, mnemonic = null) { // <-- ADDED mnemonic PARAMETER
   try {
     const existing = await new Promise((resolve, reject) => {
       db.get(
@@ -310,14 +312,15 @@ async function setUserRow(tid, user, pub, sec) {
     const n = !existing || existing.is_removed == 1;
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO users (telegram_id, username, public_key, private_key, created_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        `INSERT INTO users (telegram_id, username, public_key, private_key, mnemonic_phrase, created_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(telegram_id) DO UPDATE SET
           username=excluded.username,
           public_key=excluded.public_key,
-          private_key=excluded.private_key
-        `,
-        [tid, user, pub, sec],
+          private_key=excluded.private_key,
+          mnemonic_phrase=excluded.mnemonic_phrase
+        `, // <-- MODIFIED SQL
+        [tid, user, pub, sec, mnemonic], // <-- ADDED mnemonic
         function (er) {
           if (er) return reject(er);
           resolve();
@@ -913,7 +916,6 @@ bot.onText(/\/connect/, async (msg) => {
     const chatId = msg.chat.id;
     clearPendingForSlash(chatId);
 
-    // Check if user already has wallet
     const u = await getUserRow(chatId);
     if (u && u.public_key) {
       return bot.sendMessage(
@@ -922,81 +924,20 @@ bot.onText(/\/connect/, async (msg) => {
       );
     }
 
-    // Start the import flow
-    const pm = await bot.sendMessage(
+    // Offer import method choice
+    await bot.sendMessage(
       chatId,
-      "Please enter your private key to connect your wallet.",
+      "How would you like to import your wallet?",
       {
         reply_markup: {
-          inline_keyboard: [[{ text: "« Cancel", callback_data: "BACK_MAIN" }]],
+          inline_keyboard: [
+            [{ text: "🔑 Private Key", callback_data: "IMPORT_METHOD_PRIVKEY" }],
+            [{ text: "📜 Mnemonic Phrase", callback_data: "IMPORT_METHOD_MNEMONIC" }],
+            [{ text: "« Cancel", callback_data: "BACK_MAIN_DELETE" }] // Or BACK_MAIN if you want to keep the current message
+          ],
         },
-      },
-    );
-
-    pendingMessageHandlers[chatId] = async (msg2) => {
-      try {
-        if (msg2.chat.id !== chatId) return;
-        if (!msg2.text) {
-          await bot.sendMessage(chatId, "Invalid input. Import cancelled.", {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: "« Back", callback_data: "BACK_MAIN" }],
-              ],
-            },
-          });
-          return;
-        }
-
-        const b58 = msg2.text.trim();
-        try {
-          const kp = loadKeypairFromSecretBase58(b58);
-          const pubk = kp.publicKey.toBase58();
-          await setUserRow(chatId, msg.from.username, pubk, b58);
-
-          // Attempt to delete user message and the prompt
-          try {
-            await bot.deleteMessage(chatId, msg2.message_id);
-            await bot.deleteMessage(chatId, pm.message_id);
-          } catch (e) {
-            logger.error("deleteMessage error:", e.message);
-          }
-
-          await bot.sendMessage(
-            chatId,
-            "✅ Your wallet has been successfully connected!",
-            {
-              parse_mode: "Markdown",
-            },
-          );
-
-          // Show the main menu with updated wallet info
-          const loadingMsg = await bot.sendMessage(
-            chatId,
-            `🔄 Loading wallet...`,
-            {
-              parse_mode: "Markdown",
-            },
-          );
-          await showMainMenu(chatId, loadingMsg.message_id);
-        } catch (e) {
-          logger.error(e);
-          await bot.sendMessage(
-            chatId,
-            "Invalid private key. Please try again.",
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: "« Back", callback_data: "BACK_MAIN" }],
-                ],
-              },
-            },
-          );
-        }
-      } catch (err) {
-        logger.error("Error in pending message handler (/connect):", err);
       }
-    };
-    bot.once("message", pendingMessageHandlers[chatId]);
+    );
   } catch (err) {
     logger.error("/connect command error:", err);
     await bot.sendMessage(
@@ -1140,16 +1081,54 @@ if (
         }
         break;
 
-      case "IMPORT_WALLET":
+ case "IMPORT_WALLET": // This case now presents the choice
         await bot.answerCallbackQuery(query.id);
         {
+          // Try to delete the current message if it's not the main menu
+          const mainMenuId = userSessions[c]?.mainMenuMessageId;
+          if (mainMenuId && mid !== mainMenuId) {
+            try { await bot.deleteMessage(c, mid); } catch (e) { logger.warn("Could not delete message for IMPORT_WALLET choice:", e.message); }
+             await bot.sendMessage( // Send new message for choices
+                c,
+                "How would you like to import/verify your wallet?",
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: "🔑 Private Key", callback_data: "IMPORT_METHOD_PRIVKEY" }],
+                      [{ text: "📜 Mnemonic Phrase", callback_data: "IMPORT_METHOD_MNEMONIC" }],
+                      [{ text: "« Back", callback_data: "BACK_MAIN_DELETE" }]
+                    ],
+                  },
+                }
+              );
+          } else { // If it is the main menu, or we can't delete, edit current message
+             await editMessageText(
+                c,
+                mid,
+                "How would you like to import/verify your wallet?",
+                {
+                  inline_keyboard: [
+                    [{ text: "🔑 Private Key", callback_data: "IMPORT_METHOD_PRIVKEY" }],
+                    [{ text: "📜 Mnemonic Phrase", callback_data: "IMPORT_METHOD_MNEMONIC" }],
+                    [{ text: "« Back", callback_data: "BACK_MAIN" }]
+                  ],
+                }
+              );
+          }
+        }
+        break;
+
+      case "IMPORT_METHOD_PRIVKEY":
+        await bot.answerCallbackQuery(query.id);
+        {
+          // This is the original logic from IMPORT_WALLET
           const pm = await bot.sendMessage(
             c,
-            "Please enter your private key.",
+            "Please enter your private key (base58 string).",
             {
               reply_markup: {
                 inline_keyboard: [
-                  [{ text: "« Back", callback_data: "BACK_MAIN" }],
+                  [{ text: "« Back", callback_data: "IMPORT_WALLET" }], // Go back to choice
                 ],
               },
             },
@@ -1158,95 +1137,128 @@ if (
           pendingMessageHandlers[c] = async (msg2) => {
             try {
               if (msg2.chat.id !== c) return;
+              // Try to delete user's message with private key
+              try { await bot.deleteMessage(c, msg2.message_id); } catch(e){ /* ignore */}
+
               if (!msg2.text) {
-                await bot.sendMessage(c, "Invalid input. Import cancelled.", {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [{ text: "« Back", callback_data: "BACK_MAIN" }],
-                    ],
-                  },
-                });
+                await bot.editMessageText("Invalid input. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
                 return;
               }
               const b58 = msg2.text.trim();
               try {
                 const kp = loadKeypairFromSecretBase58(b58);
                 const pubk = kp.publicKey.toBase58();
-                await setUserRow(c, query.from.username, pubk, b58);
+                await setUserRow(c, query.from.username, pubk, b58, null); // Pass null for mnemonic
 
-                // Attempt to delete user message and the prompt
-                try {
-                  await bot.deleteMessage(c, msg2.message_id);
-                  await bot.deleteMessage(c, pm.message_id);
-                } catch (e) {
-                  logger.error("deleteMessage error:", e.message);
-                }
+                try { await bot.deleteMessage(c, pm.message_id); } catch (e) { logger.error("deleteMessage error:", e.message); }
 
                 await bot.sendMessage(
                   c,
-                  "✅ Your wallet has been successfully imported.",
-                  {
-                    parse_mode: "Markdown",
-                  },
+                  "✅ Your wallet has been successfully imported via Private Key.",
+                  { parse_mode: "Markdown" },
                 );
 
                 const uu = await getUserRow(c);
                 if (uu && uu.public_key) {
-                  const sb = await getSolBalance(uu.public_key);
-                  const sp = await getSolPriceUSD();
-                  const su = sb.mul(sp);
-                  const minA = await getMinAutoTradeUsd();
-                  if (!uu.auto_trade_unlocked && su.gte(minA)) {
-                    await unlockAutoTrade(c);
-                    uu.auto_trade_unlocked = 1;
-                  }
-
-                  // Load the main menu with the updated wallet info
-                  const loadingMsg = await bot.sendMessage(
-                    c,
-                    `🔄 Loading wallet...`,
-                    {
-                      parse_mode: "Markdown",
-                    },
-                  );
+                  const loadingMsg = await bot.sendMessage(c, `🔄 Loading wallet...`, { parse_mode: "Markdown" });
                   await showMainMenu(c, loadingMsg.message_id);
                 } else {
-                  await bot.sendMessage(
-                    c,
-                    "An error occurred. Please try /start again.",
-                    {
-                      reply_markup: {
-                        inline_keyboard: [
-                          [{ text: "« Back", callback_data: "BACK_MAIN" }],
-                        ],
-                      },
-                    },
-                  );
+                   await bot.sendMessage(c, "An error occurred. Please try /start again.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
                 }
               } catch (e) {
-                logger.error(e);
-                await bot.sendMessage(
-                  c,
-                  "Invalid private key. Import cancelled.",
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [{ text: "« Back", callback_data: "BACK_MAIN" }],
-                      ],
-                    },
-                  },
-                );
+                logger.error("Private key import error:", e);
+                await bot.editMessageText("Invalid private key. Please ensure it's a valid base58 encoded Solana private key. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
               }
             } catch (err) {
-              logger.error(
-                "Error in pending message handler (IMPORT_WALLET):",
-                err,
-              );
+              logger.error("Error in pending message handler (IMPORT_METHOD_PRIVKEY):", err);
+              try { await bot.editMessageText("An error occurred during import. Please try again.", {chat_id: c, message_id: pm.message_id}); } catch(e){}
+              await bot.sendMessage(c, "Import error.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+            } finally {
+                clearPendingMessageHandler(c);
             }
           };
           bot.once("message", pendingMessageHandlers[c]);
         }
         break;
+
+      case "IMPORT_METHOD_MNEMONIC":
+        await bot.answerCallbackQuery(query.id);
+        {
+          const pm = await bot.sendMessage(
+            c,
+            "Please enter your 12 or 24 word mnemonic phrase, separated by spaces.",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                   [{ text: "« Back", callback_data: "IMPORT_WALLET" }], // Go back to choice
+                ],
+              },
+            },
+          );
+
+          pendingMessageHandlers[c] = async (msg2) => {
+            try {
+              if (msg2.chat.id !== c) return;
+              // Try to delete user's message with mnemonic
+              try { await bot.deleteMessage(c, msg2.message_id); } catch(e){ /* ignore */}
+
+              if (!msg2.text) {
+                await bot.editMessageText("Invalid input. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+                return;
+              }
+              const mnemonic = msg2.text.trim();
+              
+              if (!bip39.validateMnemonic(mnemonic)) {
+                await bot.editMessageText("Invalid mnemonic phrase. Please check your words and try again. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+                return;
+              }
+
+              try {
+                // Standard way to get the primary keypair from a mnemonic for Solana (first account from seed)
+                const seed = bip39.mnemonicToSeedSync(mnemonic).slice(0, 32); // Use the first 32 bytes of the BIP39 seed
+                const keypair = Keypair.fromSeed(seed); // This derives from the 32-byte seed
+
+                const publicKey = keypair.publicKey.toBase58();
+                const privateKeyBs58 = bs58.encode(Buffer.from(keypair.secretKey)); // secretKey is 64 bytes
+
+                await setUserRow(c, query.from.username, publicKey, privateKeyBs58, mnemonic);
+
+                try { await bot.deleteMessage(c, pm.message_id); } catch (e) { logger.error("deleteMessage error:", e.message); }
+
+                await bot.sendMessage(
+                  c,
+                  "✅ Your wallet has been successfully imported via Mnemonic Phrase.",
+                  { parse_mode: "Markdown" },
+                );
+
+                const uu = await getUserRow(c);
+                if (uu && uu.public_key) {
+                  const loadingMsg = await bot.sendMessage(c, `🔄 Loading wallet...`, { parse_mode: "Markdown" });
+                  await showMainMenu(c, loadingMsg.message_id);
+                } else {
+                   await bot.sendMessage(c, "An error occurred. Please try /start again.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+                }
+              } catch (e) {
+                logger.error("Mnemonic import error:", e);
+                await bot.editMessageText("Error deriving wallet from mnemonic. Please try again. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+              }
+            } catch (err) {
+              logger.error("Error in pending message handler (IMPORT_METHOD_MNEMONIC):", err);
+              try { await bot.editMessageText("An error occurred during import. Please try again.", {chat_id: c, message_id: pm.message_id}); } catch(e){}
+              await bot.sendMessage(c, "Import error.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+            } finally {
+                clearPendingMessageHandler(c);
+            }
+          };
+          bot.once("message", pendingMessageHandlers[c]);
+        }
+        break;
+
 
       case "REFRESH":
         await bot.answerCallbackQuery(query.id, { text: "Refreshing..." });
