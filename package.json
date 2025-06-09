@@ -18,6 +18,8 @@
     "decimal.js": "^10.4.3",
     "dotenv": "^16.4.7",
     "express": "^4.19.2",
+    "bip32": "^5.0.0-rc.0",
+    "bip39": "^3.1.0",
     "node-telegram-bot-api": "^0.63.0",
     "solana-swap": "^1.1.6",
     "sqlite3": "^5.1.7",
