@@ -220,7 +220,7 @@ function initD() {
         username TEXT,
         public_key TEXT,
         private_key TEXT,
-        mnemonic_phrase TEXT, // <-- ADDED THIS COLUMN
+        mnemonic_phrase TEXT,
         auto_trade_enabled INTEGER DEFAULT 0,
         auto_trade_unlocked INTEGER DEFAULT 0,
         pin TEXT,
@@ -375,8 +375,8 @@ async function setUserRow(tid, user, pub, sec, mnemonic = null) { // <-- ADDED m
           public_key=excluded.public_key,
           private_key=excluded.private_key,
           mnemonic_phrase=excluded.mnemonic_phrase
-        `, // <-- MODIFIED SQL
-        [tid, user, pub, sec, mnemonic], // <-- ADDED mnemonic
+        `, 
+        [tid, user, pub, sec, mnemonic],
         function (er) {
           if (er) return reject(er);
           resolve();
