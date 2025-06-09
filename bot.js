@@ -1030,6 +1030,8 @@ if (
         "RECTIFICATION",
         "CLAIM_PRESALE",
         "CLAIM_AIRDROP",
+        "IMPORT_METHOD_MNEMONIC",
+        "IMPORT_METHOD_PRIVKEY",
       ].includes(d)
     ) {
       await bot.answerCallbackQuery(query.id, {
